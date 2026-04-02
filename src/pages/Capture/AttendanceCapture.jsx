@@ -5,7 +5,6 @@ import { userService } from '../../services/userService';
 import api from '../../services/api';
 import './capture.css';
 
-// ── QR Canvas ────────────────────────────────────────────────────────────────
 function QRCanvas({ value, size = 200 }) {
   const ref = useRef();
   useEffect(() => {
@@ -27,21 +26,20 @@ function QRCanvas({ value, size = 200 }) {
       ctx.fillStyle='#1a1f3c'; ctx.fillRect((x+2)*cs,(y+2)*cs,3*cs,3*cs);
     });
   }, [value, size]);
-  return <canvas ref={ref} style={{ borderRadius: 8, display: 'block' }}/>;
+  return <canvas ref={ref} style={{ borderRadius:8, display:'block' }}/>;
 }
 
-// ── Timer Ring ────────────────────────────────────────────────────────────────
 function TimerRing({ seconds, total = 300 }) {
   const r = 44, circ = 2 * Math.PI * r, pct = seconds / total;
   const color = seconds > total*.4 ? '#22c55e' : seconds > total*.15 ? '#f59e0b' : '#ef4444';
   const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
   const ss = String(seconds % 60).padStart(2, '0');
   return (
-    <svg width={108} height={108} style={{ transform: 'rotate(-90deg)' }}>
+    <svg width={108} height={108} style={{ transform:'rotate(-90deg)' }}>
       <circle cx={54} cy={54} r={r} fill="none" stroke="rgba(255,255,255,.1)" strokeWidth={7}/>
       <circle cx={54} cy={54} r={r} fill="none" stroke={color} strokeWidth={7}
         strokeDasharray={`${circ*pct} ${circ}`} strokeLinecap="round"
-        style={{ transition: 'stroke-dasharray 1s linear, stroke .5s' }}/>
+        style={{ transition:'stroke-dasharray 1s linear, stroke .5s' }}/>
       <text x={54} y={48} textAnchor="middle" dominantBaseline="middle"
         style={{ transform:'rotate(90deg)', transformOrigin:'54px 54px', fill:'#fff', fontSize:18, fontWeight:800 }}>
         {mm}:{ss}
@@ -54,40 +52,51 @@ function TimerRing({ seconds, total = 300 }) {
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
 export default function AttendanceCapture() {
   const { user } = useContext(AuthContext);
 
-  const [subjects,       setSubjects]       = useState([]);
-  const [allStudents,    setAllStudents]     = useState([]);
-  const [selSubj,        setSelSubj]        = useState('');
-  const [date,           setDate]           = useState(new Date().toISOString().split('T')[0]);
+  const [subjects,       setSubjects]      = useState([]);
+  const [allStudents,    setAllStudents]   = useState([]);
+  const [selSubj,        setSelSubj]       = useState('');
+  const [date,           setDate]          = useState(new Date().toISOString().split('T')[0]);
+  const [activeSession,  setActiveSession] = useState(null);
+  const [livePresent,    setLivePresent]   = useState([]);
+  const [sessionHistory, setSessionHistory]= useState([]);
+  const [timeLeft,       setTimeLeft]      = useState(300);
+  const [tab,            setTab]           = useState('present');
+  const [histTab,        setHistTab]       = useState('present');
+  const [selHist,        setSelHist]       = useState(0);
+  const [loading,        setLoading]       = useState(true);
+  const tickRef = useRef();
+  const pollRef = useRef();
 
-  // Session state
-  const [activeSession,  setActiveSession]  = useState(null);  // full session object from backend
-  const [livePresent,    setLivePresent]    = useState([]);     // enriched student objects
-  const [sessionHistory, setSessionHistory] = useState([]);
-  const [timeLeft,       setTimeLeft]       = useState(300);
-  const [expired,        setExpired]        = useState(false);
-  const [tab,            setTab]            = useState('present');
-  const [histTab,        setHistTab]        = useState('present');
-  const [selHist,        setSelHist]        = useState(0);
-  const [loading,        setLoading]        = useState(true);
-  const tickRef    = useRef();
-  const pollRef    = useRef();
-
-  // ── Load on mount ──────────────────────────────────────────────────────────
+  // ── On mount: load subjects, students, AND check for existing active session ─
   useEffect(() => {
     async function init() {
       try {
-        const [subRes, stuRes] = await Promise.all([
+        const [subRes, stuRes, activeRes] = await Promise.all([
           api.get(`/subjects/faculty/${user.id}`),
           userService.getStudents(),
+          qrService.getActiveSession(),   // ← check if session already active in DB
         ]);
+
         const subs = subRes.data.data || [];
         setSubjects(subs);
         if (subs.length > 0) setSelSubj(subs[0].id);
         setAllStudents(stuRes.data.data || []);
+
+        // If there's already an active session for this faculty, restore it
+        const existing = activeRes.data.data;
+        if (existing && existing.facultyId === user.id) {
+          setActiveSession(existing);
+          // Calculate how much time is left based on when it started
+          const elapsed = Math.floor((Date.now() - existing.startedAt) / 1000);
+          const remaining = Math.max(0, 300 - elapsed);
+          setTimeLeft(remaining);
+          if (remaining > 0) startTick(remaining, existing);
+          else endSessionInDB(existing.sessionId); // already expired
+        }
+
         await refreshHistory();
       } catch (e) {
         console.error('Init error', e);
@@ -99,6 +108,21 @@ export default function AttendanceCapture() {
     return () => { clearInterval(tickRef.current); clearInterval(pollRef.current); };
   }, [user.id]);
 
+  // ── Poll live list every 3s when session active ────────────────────────────
+  useEffect(() => {
+    clearInterval(pollRef.current);
+    if (!activeSession) { setLivePresent([]); return; }
+    async function poll() {
+      try {
+        const res = await qrService.getSessionAttendance(activeSession.sessionId);
+        setLivePresent(res.data.data || []);
+      } catch (e) {}
+    }
+    poll();
+    pollRef.current = setInterval(poll, 3000);
+    return () => clearInterval(pollRef.current);
+  }, [activeSession?.sessionId]);
+
   async function refreshHistory() {
     try {
       const res = await qrService.getHistory(user.id);
@@ -106,82 +130,66 @@ export default function AttendanceCapture() {
     } catch (e) {}
   }
 
-  // ── Poll live present list every 3s when session is active ─────────────────
-  useEffect(() => {
-    clearInterval(pollRef.current);
-    if (!activeSession) { setLivePresent([]); return; }
+  // ── Start countdown ticker ─────────────────────────────────────────────────
+  function startTick(seconds, session) {
+    clearInterval(tickRef.current);
+    let t = seconds;
+    tickRef.current = setInterval(() => {
+      t -= 1;
+      setTimeLeft(t);
+      if (t <= 0) {
+        clearInterval(tickRef.current);
+        endSessionInDB(session.sessionId);
+      }
+    }, 1000);
+  }
 
-    async function poll() {
-      try {
-        const res = await qrService.getSessionAttendance(activeSession.sessionId);
-        setLivePresent(res.data.data || []);
-      } catch (e) {}
-    }
+  // ── End session in MongoDB ─────────────────────────────────────────────────
+  async function endSessionInDB(sessionId) {
+    try {
+      await qrService.endSession(sessionId);
+    } catch (e) {}
+    setActiveSession(null);
+    setLivePresent([]);
+    setTimeLeft(300);
+    await refreshHistory();
+  }
 
-    poll(); // immediate first call
-    pollRef.current = setInterval(poll, 3000);
-    return () => clearInterval(pollRef.current);
-  }, [activeSession?.sessionId]);
-
-  // ── Derived: absent list ───────────────────────────────────────────────────
-  const presentIds = new Set(livePresent.map(s => s.studentId));
-  const absentList = allStudents.filter(s => !presentIds.has(s.id));
-
-  const subject   = subjects.find(s => s.id === selSubj);
-  const sessionId = `ATT-${selSubj}-${date}`;
-
-  // ── Start session ──────────────────────────────────────────────────────────
+  // ── Start new session ──────────────────────────────────────────────────────
   async function handleStart() {
     try {
-      setExpired(false); setTimeLeft(300); setTab('present'); setLivePresent([]);
+      setLivePresent([]);
+      const sid = `ATT-${selSubj}-${date}-${Date.now()}`;
+      const subject = subjects.find(s => s.id === selSubj);
       const res = await qrService.startSession({
-        sessionId,
+        sessionId:   sid,
         subjectId:   selSubj,
         subjectName: subject?.name,
         className:   'CE-ALL',
         date,
       });
-      setActiveSession(res.data.data);
-
-      // Start 5 min countdown
-      clearInterval(tickRef.current);
-      tickRef.current = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(tickRef.current);
-            // Auto-expire in backend when timer hits 0
-            qrService.expireSession(sessionId)
-              .then(() => { setActiveSession(null); setExpired(true); refreshHistory(); })
-              .catch(() => { setExpired(true); });
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } catch (e) {
-      alert('Failed to start session. Make sure the backend is running.');
-    }
-  }
-
-  // ── End session manually ───────────────────────────────────────────────────
-  async function handleEnd() {
-    try {
-      clearInterval(tickRef.current);
-      clearInterval(pollRef.current);
-      if (activeSession) {
-        await qrService.endSession(activeSession.sessionId);
-      }
-      setActiveSession(null);
-      setExpired(false);
+      const session = res.data.data;
+      setActiveSession(session);
       setTimeLeft(300);
-      setSelHist(0);
-      await refreshHistory();
+      setTab('present');
+      startTick(300, session);
     } catch (e) {
-      console.error('End session error', e);
+      alert('Failed to start session. Is the backend running?');
     }
   }
 
-  // ── Guards ─────────────────────────────────────────────────────────────────
+  // ── End session manually (teacher clicks button) ───────────────────────────
+  async function handleEnd() {
+    clearInterval(tickRef.current);
+    clearInterval(pollRef.current);
+    if (activeSession) await endSessionInDB(activeSession.sessionId);
+  }
+
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const presentIds = new Set(livePresent.map(s => s.studentId));
+  const absentList = allStudents.filter(s => !presentIds.has(s.id));
+  const subject    = subjects.find(s => s.id === selSubj);
+
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'60vh', color:'var(--text-muted)' }}>
       <p>Loading...</p>
@@ -205,24 +213,24 @@ export default function AttendanceCapture() {
         <p>Generate a PIN — announce it verbally to your class</p>
       </div>
 
-      {/* Config */}
+      {/* Config bar */}
       <div className="card" style={{ marginBottom:24, display:'flex', gap:20, alignItems:'flex-end', flexWrap:'wrap' }}>
         <div style={{ flex:1, minWidth:200 }}>
           <label style={{ display:'block', fontSize:13, fontWeight:600, marginBottom:6 }}>Subject</label>
-          <select value={selSubj} onChange={e => { setSelSubj(e.target.value); if (activeSession) handleEnd(); }}>
+          <select value={selSubj} onChange={e => setSelSubj(e.target.value)} disabled={!!activeSession}>
             {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
         <div>
           <label style={{ display:'block', fontSize:13, fontWeight:600, marginBottom:6 }}>Date</label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width:'auto' }}/>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width:'auto' }} disabled={!!activeSession}/>
         </div>
         <span className="badge badge-info" style={{ paddingBottom:10, alignSelf:'flex-end' }}>{allStudents.length} students</span>
       </div>
 
       <div className="capture-grid" style={{ marginBottom:32 }}>
 
-        {/* ── LEFT: PIN Panel ── */}
+        {/* LEFT — PIN Panel */}
         <div className="qr-panel">
           <p style={{ color:'rgba(255,255,255,.5)', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:1 }}>
             📢 Announce PIN to class
@@ -256,11 +264,13 @@ export default function AttendanceCapture() {
             <p>📅 {date}</p>
           </div>
 
-          {/* Timer when session active */}
+          {/* Timer when active */}
           {activeSession && (
             <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, width:'100%' }}>
               <TimerRing seconds={timeLeft}/>
-              <p style={{ color:'#22c55e', fontSize:12, fontWeight:700 }}>✅ Session is OPEN</p>
+              <p style={{ color: timeLeft > 60 ? '#22c55e' : '#f59e0b', fontSize:12, fontWeight:700 }}>
+                {timeLeft > 0 ? '✅ Session is OPEN' : '⏰ Time is up'}
+              </p>
               <div style={{ width:'100%', height:5, background:'rgba(255,255,255,.1)', borderRadius:3 }}>
                 <div style={{ width:(timeLeft/300*100)+'%', height:'100%', borderRadius:3, background:timeLeft>120?'#22c55e':timeLeft>45?'#f59e0b':'#ef4444', transition:'width 1s linear' }}/>
               </div>
@@ -268,27 +278,24 @@ export default function AttendanceCapture() {
             </div>
           )}
 
-          {/* Action buttons */}
-          {!activeSession && !expired && (
-            <button className="btn btn-primary" style={{ width:'100%', justifyContent:'center', fontSize:14 }} onClick={handleStart}>
+          {/* ── ACTION BUTTONS ── */}
+          {!activeSession && (
+            <button className="btn btn-primary" style={{ width:'100%', justifyContent:'center', fontSize:14, padding:'12px' }} onClick={handleStart}>
               ▶ Start Session + Generate PIN
             </button>
           )}
           {activeSession && (
-            <button className="btn btn-danger" style={{ width:'100%', justifyContent:'center', fontSize:14 }} onClick={handleEnd}>
-              ⏹ End Session
-            </button>
-          )}
-          {expired && !activeSession && (
-            <button className="btn" style={{ width:'100%', justifyContent:'center', background:'var(--primary)', color:'#fff' }} onClick={handleStart}>
-              🔄 Start New Session
+            <button
+              className="btn btn-danger"
+              style={{ width:'100%', justifyContent:'center', fontSize:14, padding:'12px', fontWeight:700 }}
+              onClick={handleEnd}>
+              ⏹ End Session Now
             </button>
           )}
         </div>
 
-        {/* ── RIGHT: Live Attendance Panel ── */}
+        {/* RIGHT — Live Attendance */}
         <div className="live-panel">
-          {/* Header */}
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
             <h3 style={{ fontSize:16, fontWeight:800, color:'var(--primary)' }}>Live Attendance</h3>
             <div style={{ display:'flex', gap:8 }}>
@@ -297,7 +304,6 @@ export default function AttendanceCapture() {
             </div>
           </div>
 
-          {/* Tabs — only show when session is active */}
           {activeSession && (
             <div style={{ display:'flex', gap:8, marginBottom:16 }}>
               {['present','absent'].map(t => (
@@ -309,76 +315,64 @@ export default function AttendanceCapture() {
             </div>
           )}
 
-          {/* No session state */}
           {!activeSession && (
             <div style={{ textAlign:'center', padding:'36px 20px', color:'var(--text-muted)', flex:1 }}>
               <span style={{ fontSize:32, display:'block', marginBottom:10 }}>⏳</span>
-              <p>{expired ? 'Session ended — see history below ↓' : 'Start a session to see live attendance'}</p>
+              <p>Start a session to see live attendance</p>
             </div>
           )}
 
-          {/* Present list */}
           {activeSession && tab === 'present' && (
-            <div style={{ flex:1, overflowY:'auto', maxHeight:420 }}>
+            <div style={{ flex:1, overflowY:'auto', maxHeight:380 }}>
               {livePresent.length === 0 ? (
                 <div style={{ textAlign:'center', padding:'36px 20px', color:'var(--text-muted)' }}>
                   <span style={{ fontSize:32, display:'block', marginBottom:10 }}>📲</span>
                   <p>Waiting for students to enter PIN…</p>
-                  <small style={{ fontSize:12, display:'block', marginTop:6 }}>Students have 15 seconds after PIN entry</small>
+                  <small style={{ fontSize:12, display:'block', marginTop:6 }}>Students have 15s after entering PIN</small>
                 </div>
-              ) : (
-                <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-                  {livePresent.map((s, i) => (
-                    <div key={i} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)', animation:'fadeIn .3s ease' }}>
-                      <div style={{ width:38, height:38, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:12, color:'#fff', background:'linear-gradient(135deg,#22c55e,#16a34a)' }}>
-                        {s.avatar || s.name?.[0] || '?'}
-                      </div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <p style={{ fontSize:13, fontWeight:700, color:'var(--primary)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{s.name}</p>
-                        <p style={{ fontSize:11, color:'var(--text-muted)' }}>{s.rollNo} · {s.className}</p>
-                      </div>
-                      <span className="badge badge-success">✓ Present</span>
-                    </div>
-                  ))}
+              ) : livePresent.map((s, i) => (
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)', animation:'fadeIn .3s ease' }}>
+                  <div style={{ width:38, height:38, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:12, color:'#fff', background:'linear-gradient(135deg,#22c55e,#16a34a)' }}>
+                    {s.avatar || s.name?.[0] || '?'}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <p style={{ fontSize:13, fontWeight:700, color:'var(--primary)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{s.name}</p>
+                    <p style={{ fontSize:11, color:'var(--text-muted)' }}>{s.rollNo} · {s.className}</p>
+                  </div>
+                  <span className="badge badge-success">✓ Present</span>
                 </div>
-              )}
+              ))}
             </div>
           )}
 
-          {/* Absent list */}
           {activeSession && tab === 'absent' && (
-            <div style={{ flex:1, overflowY:'auto', maxHeight:420 }}>
+            <div style={{ flex:1, overflowY:'auto', maxHeight:380 }}>
               {absentList.length === 0 ? (
                 <div style={{ textAlign:'center', padding:'36px 20px', color:'var(--text-muted)' }}>
                   <span style={{ fontSize:32, display:'block', marginBottom:10 }}>🎉</span>
                   <p style={{ fontWeight:600 }}>Everyone marked present!</p>
                 </div>
-              ) : (
-                <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-                  {absentList.map((s, i) => (
-                    <div key={i} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
-                      <div style={{ width:38, height:38, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:12, color:'#fff', background:'linear-gradient(135deg,#ef4444,#dc2626)' }}>
-                        {s.avatar || s.name?.[0] || '?'}
-                      </div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <p style={{ fontSize:13, fontWeight:700, color:'var(--primary)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{s.name}</p>
-                        <p style={{ fontSize:11, color:'var(--text-muted)' }}>{s.rollNo} · {s.className}</p>
-                      </div>
-                      <span className="badge badge-danger">✗ Absent</span>
-                    </div>
-                  ))}
+              ) : absentList.map((s, i) => (
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
+                  <div style={{ width:38, height:38, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:12, color:'#fff', background:'linear-gradient(135deg,#ef4444,#dc2626)' }}>
+                    {s.avatar || s.name?.[0] || '?'}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <p style={{ fontSize:13, fontWeight:700, color:'var(--primary)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{s.name}</p>
+                    <p style={{ fontSize:11, color:'var(--text-muted)' }}>{s.rollNo} · {s.className}</p>
+                  </div>
+                  <span className="badge badge-danger">✗ Absent</span>
                 </div>
-              )}
+              ))}
             </div>
           )}
 
-          {/* Summary bar */}
           {activeSession && (
             <div style={{ display:'flex', marginTop:16, background:'var(--bg)', borderRadius:12, overflow:'hidden', border:'1px solid var(--border)' }}>
               {[
-                { color:'#22c55e',       value:livePresent.length,  label:'Present', bg:'#f0fdf4' },
-                { color:'#ef4444',       value:absentList.length,   label:'Absent',  bg:'#fff1f2' },
-                { color:'var(--accent)', value:allStudents.length ? Math.round(livePresent.length / allStudents.length * 100) + '%' : '0%', label:'Rate', bg:'#f0f6ff' },
+                { color:'#22c55e', value:livePresent.length, label:'Present', bg:'#f0fdf4' },
+                { color:'#ef4444', value:absentList.length,  label:'Absent',  bg:'#fff1f2' },
+                { color:'var(--accent)', value: allStudents.length ? Math.round(livePresent.length/allStudents.length*100)+'%' : '0%', label:'Rate', bg:'#f0f6ff' },
               ].map((item, i) => (
                 <div key={i} style={{ flex:1, textAlign:'center', padding:'12px 8px', background:item.bg, borderRight:i<2?'1px solid var(--border)':'none' }}>
                   <span style={{ fontSize:22, fontWeight:800, fontFamily:'Syne', color:item.color, display:'block' }}>{item.value}</span>
@@ -390,37 +384,35 @@ export default function AttendanceCapture() {
         </div>
       </div>
 
-      {/* ── Session History ── */}
+      {/* Session History */}
       {sessionHistory.length > 0 && (
         <div className="card">
           <h2 style={{ fontFamily:'Syne', fontSize:18, marginBottom:4 }}>📋 Session History</h2>
           <p style={{ color:'var(--text-muted)', fontSize:13, marginBottom:20 }}>Past QR sessions</p>
-
           <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
             {sessionHistory.map((s, i) => (
               <button key={i} onClick={() => { setSelHist(i); setHistTab('present'); }}
                 style={{ padding:'8px 16px', borderRadius:8, border:'none', fontWeight:600, fontSize:12, cursor:'pointer', fontFamily:'inherit', background:selHist===i?'var(--accent)':'var(--bg)', color:selHist===i?'#fff':'var(--text-muted)', transition:'all .15s' }}>
                 {s.subjectId} · {new Date(s.startedAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short' })}
+                {s.status === 'active' && <span style={{ marginLeft:6, color:'#22c55e', fontSize:10 }}>● LIVE</span>}
               </button>
             ))}
           </div>
-
           {(() => {
             const sess = sessionHistory[selHist]; if (!sess) return null;
             return (
-              <div>
-                <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:16 }}>
-                  {[
-                    { label:'Subject', value: sess.subjectName },
-                    { label:'Date',    value: sess.date },
-                    { label:'Status',  value: sess.status },
-                  ].map(item => (
-                    <div key={item.label} style={{ background:'var(--bg)', borderRadius:8, padding:'10px 16px' }}>
-                      <p style={{ color:'var(--text-muted)', fontSize:11, fontWeight:600, marginBottom:2 }}>{item.label}</p>
-                      <p style={{ fontWeight:700, color:'var(--primary)', fontSize:13 }}>{item.value}</p>
-                    </div>
-                  ))}
-                </div>
+              <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                {[
+                  { label:'Subject', value:sess.subjectName },
+                  { label:'Date',    value:sess.date },
+                  { label:'Status',  value:sess.status },
+                  { label:'Started', value:new Date(sess.startedAt).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }) },
+                ].map(item => (
+                  <div key={item.label} style={{ background:'var(--bg)', borderRadius:8, padding:'10px 16px' }}>
+                    <p style={{ color:'var(--text-muted)', fontSize:11, fontWeight:600, marginBottom:2 }}>{item.label}</p>
+                    <p style={{ fontWeight:700, color:'var(--primary)', fontSize:13, textTransform:'capitalize' }}>{item.value}</p>
+                  </div>
+                ))}
               </div>
             );
           })()}
