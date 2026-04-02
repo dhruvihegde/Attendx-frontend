@@ -1,9 +1,12 @@
 import { useState, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import './auth.css';
 
-export default function LoginPage({ onNavigate }) {
-  const { login } = useContext(AuthContext);
+export default function LoginPage() {
+  const { login }  = useContext(AuthContext);
+  const navigate   = useNavigate();
+
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [role,     setRole]     = useState('admin');
@@ -11,23 +14,28 @@ export default function LoginPage({ onNavigate }) {
   const [loading,  setLoading]  = useState(false);
 
   const QUICK = [
-    { label:'Admin',           email:'admin@college.edu',   password:'admin123',   role:'admin'   },
-    { label:'Prof. Anita',     email:'anita@college.edu',   password:'faculty123', role:'faculty' },
-    { label:'Prof. Vikram',    email:'vikram@college.edu',  password:'faculty123', role:'faculty' },
-    { label:'Dhruvi (A3)',     email:'dhruvi@student.edu',  password:'student123', role:'student' },
-    { label:'Arjun A1',        email:'arjun@student.edu',   password:'student123', role:'student' },
-    { label:'Aryaman A2',      email:'aryaman@student.edu', password:'student123', role:'student' },
+    { label:'Admin',        email:'admin@college.edu',  password:'admin123',   role:'admin'   },
+    { label:'Prof. Anita',  email:'anita@college.edu',  password:'faculty123', role:'faculty' },
+    { label:'Prof. Vikram', email:'vikram@college.edu', password:'faculty123', role:'faculty' },
+    { label:'Dhruvi (A3)',  email:'dhruvi@student.edu', password:'student123', role:'student' },
+    { label:'Arjun A1',     email:'arjun@student.edu',  password:'student123', role:'student' },
+    { label:'Aryaman A2',   email:'aryaman@student.edu',password:'student123', role:'student' },
   ];
 
-  const handleLogin = async e => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    await new Promise(r => setTimeout(r, 400));
-    const result = login(email, password, role);
+    const result = await login(email, password, role);
     setLoading(false);
-    if (result.success) onNavigate('dashboard');
-    else setError(result.error);
+    if (result.success) {
+      // Navigate based on role
+      if (result.user.role === 'admin')   navigate('/admin');
+      else if (result.user.role === 'faculty') navigate('/faculty');
+      else navigate('/student');
+    } else {
+      setError(result.error || 'Invalid credentials or role mismatch');
+    }
   };
 
   return (
@@ -82,10 +90,8 @@ export default function LoginPage({ onNavigate }) {
           </div>
         </div>
 
-        <p
-          style={{ textAlign:'center', marginTop:16, fontSize:13, color:'var(--text-muted)', cursor:'pointer' }}
-          onClick={() => onNavigate('landing')}
-        >
+        <p style={{ textAlign:'center', marginTop:16, fontSize:13, color:'var(--text-muted)', cursor:'pointer' }}
+          onClick={() => navigate('/')}>
           ← Back to Home
         </p>
       </div>
