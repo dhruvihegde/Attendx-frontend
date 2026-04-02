@@ -1,0 +1,18 @@
+export const ROUTES = {
+  HOME: '/',
+  LOGIN: '/login',
+  FORGOT_PASSWORD: '/forgot-password',
+  ADMIN_DASHBOARD: '/admin',
+  ADMIN_USERS: '/admin/users',
+  ADMIN_DEPARTMENTS: '/admin/departments',
+  ADMIN_TIMETABLE: '/admin/timetable',
+  FACULTY_DASHBOARD: '/faculty',
+  FACULTY_MARK: '/faculty/mark',
+  FACULTY_HISTORY: '/faculty/history',
+  FACULTY_TIMETABLE: '/faculty/timetable',
+  STUDENT_DASHBOARD: '/student',
+  STUDENT_ATTENDANCE: '/student/attendance',
+  CAPTURE: '/capture',
+  ANALYTICS: '/analytics',
+  NOTIFICATIONS: '/notifications',
+};

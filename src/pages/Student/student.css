@@ -1,0 +1,108 @@
+.student-dashboard { max-width: 1000px; }
+
+.dash-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+.dash-header h1 { font-size: 26px; color: var(--primary); }
+.dash-sub { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+.dash-actions { display: flex; gap: 10px; }
+
+.stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 20px; }
+@media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2,1fr); } }
+
+.eligibility-banner { display: flex; align-items: center; gap: 16px; padding: 18px 22px; border-radius: 14px; margin-bottom: 20px; }
+.eligibility-banner.eligible   { background: #f0fdf4; border: 1px solid #bbf7d0; }
+.eligibility-banner.ineligible { background: #fff1f2; border: 1px solid #fecaca; }
+.elig-icon { font-size: 32px; }
+.elig-text { flex: 1; }
+.elig-text h3 { font-size: 15px; font-weight: 700; color: var(--primary); margin-bottom: 3px; }
+.elig-text p  { font-size: 13px; color: var(--text-muted); }
+.elig-pct { text-align: right; }
+.elig-pct span { font-size: 28px; font-weight: 800; font-family: 'Syne'; color: var(--primary); display: block; }
+.elig-pct small { font-size: 11px; color: var(--text-muted); }
+
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+@media (max-width: 700px) { .charts-row { grid-template-columns: 1fr; } }
+.chart-card { background: #fff; border-radius: 14px; padding: 18px; box-shadow: var(--shadow); }
+.chart-card h3 { font-size: 14px; font-weight: 800; color: var(--primary); margin-bottom: 14px; }
+
+.subject-row { margin-bottom: 12px; }
+.subject-row-top { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+.progress-track { background: #f0f4ff; border-radius: 4px; height: 7px; }
+.progress-fill  { height: 100%; border-radius: 4px; transition: width .4s; }
+
+.subject-card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: var(--shadow); }
+.subject-card.warning { border-left: 3px solid var(--warning); }
+.subject-card.danger  { border-left: 3px solid var(--danger); }
+.attendance-bar-wrap { background: #f0f4ff; border-radius: 4px; height: 7px; }
+.attendance-bar      { height: 100%; border-radius: 4px; transition: width .4s; }
+
+/* ── Live QR Session Card ── */
+.qr-live-card {
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #0f172a, #1e1b4b);
+  border-radius: 18px;
+  border: 1px solid rgba(91,141,238,.3);
+  box-shadow: 0 8px 40px rgba(91,141,238,.2);
+  overflow: hidden;
+  animation: qrDrop .45s cubic-bezier(.34,1.56,.64,1);
+}
+.qr-live-bar {
+  height: 4px;
+  background: linear-gradient(90deg,#5b8dee,#e84393,#8b5cf6,#5b8dee);
+  background-size: 300% 100%;
+  animation: shimmer 2.5s linear infinite;
+}
+.qr-live-body { padding: 22px 26px; display: flex; gap: 28px; flex-wrap: wrap; align-items: center; }
+.qr-live-info { flex: 1; min-width: 200px; }
+.qr-live-status { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #22c55e; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+.qr-dot { width: 9px; height: 9px; border-radius: 50%; background: #22c55e; animation: pulse 1.4s infinite; box-shadow: 0 0 8px #22c55e; }
+.qr-live-subject { color: #fff; font-size: 20px; font-weight: 900; margin-bottom: 5px; }
+.qr-live-class   { color: rgba(255,255,255,.45); font-size: 13px; margin-bottom: 3px; }
+.qr-live-id      { color: rgba(255,255,255,.28); font-size: 10px; font-family: monospace; margin-bottom: 16px; word-break: break-all; }
+.qr-live-hint    { color: rgba(255,255,255,.4); font-size: 12px; line-height: 1.6; margin-bottom: 18px; }
+.btn-mark-present {
+  background: linear-gradient(135deg,#22c55e,#16a34a);
+  border: none; border-radius: 12px;
+  padding: 14px 32px; color: #fff; font-size: 16px; font-weight: 800; cursor: pointer;
+  box-shadow: 0 6px 28px rgba(34,197,94,.45);
+  display: flex; align-items: center; gap: 10px;
+  transition: transform .1s;
+}
+.btn-mark-present:hover  { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(34,197,94,.55); }
+.btn-mark-present:active { transform: scale(.97); }
+.qr-live-code { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.qr-code-wrap { background: #fff; border-radius: 14px; padding: 14px; box-shadow: 0 0 0 4px rgba(91,141,238,.25),0 12px 32px rgba(0,0,0,.3); }
+.qr-code-hint { color: rgba(255,255,255,.3); font-size: 10px; text-align: center; }
+
+/* ── Success card ── */
+.qr-success-card {
+  margin-bottom: 24px;
+  background: linear-gradient(135deg,#052e16,#0a3d22);
+  border-radius: 18px; border: 1px solid rgba(34,197,94,.3);
+  box-shadow: 0 8px 40px rgba(34,197,94,.18);
+  padding: 24px 28px;
+  display: flex; align-items: center; gap: 22px;
+  animation: successPop .5s cubic-bezier(.34,1.56,.64,1);
+}
+.qr-success-icon { width:68px; height:68px; border-radius:50%; background:rgba(34,197,94,.15); border:2.5px solid #22c55e; display:flex; align-items:center; justify-content:center; font-size:34px; flex-shrink:0; }
+.qr-success-title { color:#22c55e; font-weight:900; font-size:20px; margin-bottom:5px; }
+.qr-success-sub   { color:rgba(255,255,255,.55); font-size:14px; margin-bottom:3px; }
+.qr-success-time  { color:rgba(255,255,255,.3); font-size:12px; }
+
+/* ── No session notice ── */
+.no-session-notice { background:#fff; border:1px dashed #e2e8f0; border-radius:12px; padding:13px 18px; margin-bottom:20px; display:flex; align-items:center; gap:12px; font-size:13px; color:#6b7280; }
+
+/* ── QR History ── */
+.qr-history-card { background:#fff; border-radius:14px; padding:20px; box-shadow:var(--shadow); margin-top:4px; }
+.qr-history-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.qr-history-header h3 { font-size:15px; font-weight:800; color:var(--primary); }
+.qr-history-header p  { font-size:12px; color:#6b7280; margin-top:2px; }
+.qr-history-empty { text-align:center; padding:36px 20px; color:#6b7280; }
+.qr-history-empty span  { font-size:34px; display:block; margin-bottom:10px; }
+.qr-history-empty p     { font-size:14px; font-weight:700; margin-bottom:5px; }
+.qr-history-empty small { font-size:12px; }
+
+/* ── Animations ── */
+@keyframes qrDrop     { 0%{transform:translateY(-14px);opacity:0} 100%{transform:none;opacity:1} }
+@keyframes successPop { 0%{transform:scale(.8);opacity:0} 65%{transform:scale(1.06)} 100%{transform:scale(1);opacity:1} }
+@keyframes shimmer    { 0%{background-position:-300% 0} 100%{background-position:300% 0} }
+@keyframes pulse      { 0%,100%{opacity:1} 50%{opacity:.35} }

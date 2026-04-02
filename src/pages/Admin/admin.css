@@ -1,0 +1,7 @@
+.admin-users-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 20px; }
+.user-card { background: #fff; border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 14px; transition: box-shadow 0.2s; }
+.user-card:hover { box-shadow: var(--shadow-lg); }
+.dept-card { background: #fff; border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); border-left: 4px solid var(--accent); }
+.tt-table th { background: var(--primary); color: #fff !important; }
+.tt-table td { vertical-align: top; }
+.tt-slot { background: rgba(91,141,238,0.1); border: 1px solid rgba(91,141,238,0.2); border-radius: 6px; padding: 6px 8px; margin-bottom: 4px; font-size: 12px; }

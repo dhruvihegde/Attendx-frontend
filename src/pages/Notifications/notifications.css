@@ -1,0 +1,4 @@
+.notif-item { display:flex; gap:14px; padding:16px; border-radius:10px; border:1px solid var(--border); background:#fff; transition:background 0.15s; cursor:pointer; }
+.notif-item:hover { background:#f8faff; }
+.notif-item.unread { border-left:3px solid var(--accent); background:#f0f6ff; }
+.notif-icon { font-size:24px; flex-shrink:0; }

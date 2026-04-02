@@ -1,0 +1,5 @@
+.attendance-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 12px; margin-top: 16px; }
+.student-att-card { background: #fff; border: 2px solid var(--border); border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; transition: all 0.15s; cursor: pointer; }
+.student-att-card.present { border-color: var(--success); background: #f0fdf4; }
+.student-att-card.absent  { border-color: var(--danger);  background: #fff1f2; }
+.student-att-card:hover   { box-shadow: var(--shadow); }
